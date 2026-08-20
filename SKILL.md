@@ -1,14 +1,14 @@
 ---
 name: surgical-HermesDotHealth
 description: "Diagnose .hermes folder health, size, bloat, and stale files — portable (linux/macos/windows-git-bash/termux), bug-free find, hermes doctor-first."
-version: 1.1.0
+version: 1.2.0
 author: Hermes curator (revised by LittleDevil)
 license: MIT
 platforms: [linux, macos, windows, termux]
 metadata:
   hermes:
     tags: [hermes, doctor, diagnosis, folder-health, bloat, cache, cleanup]
-    related_skills: [hermes-agent, hermes-credential-diagnostics, hermes-gateway-ops, termux-system-health]
+    related_skills: [hermes-agent]
 ---
 
 # Hermes Folder Health Diagnostic (v1.1)
@@ -27,7 +27,7 @@ Use when:
 - `.hermes` folder size seems excessive
 - `hermes doctor` reports filesystem warnings
 - You suspect cache buildup or orphaned files in `.hermes/`
-- Periodic maintenance on a Termux/Android host (pair with `termux-system-health`)
+- Periodic maintenance on a Termux/Android host (check both `~` and `/data/data/com.termux`)
 
 ## 0. Host pressure first — de-escalate if healthy
 Do NOT recommend cleanup on a healthy disk. Measure first:
@@ -46,7 +46,7 @@ hermes doctor --fix 2>&1      # auto-fixes what it can (e.g. WAL checkpoint)
 hermes doctor --live 2>&1     # opt-in real network probes per backend
 ```
 Parse for: filesystem warnings, config validation, credential issues (see
-`hermes-credential-diagnostics`), model/provider connectivity. This skill ADDS
+the `hermes-agent` skill), model/provider connectivity. This skill ADDS
 the per-directory sizing breakdown that `doctor` does not give.
 
 ## 2. Measure `.hermes` total size and top contributors
@@ -54,12 +54,19 @@ the per-directory sizing breakdown that `doctor` does not give.
 du -sh ~/.hermes
 du -sh -d1 ~/.hermes 2>/dev/null | sort -hr | head -25
 ```
+On a typical dev host `.hermes` is ~13 GB: `hermes-agent/` alone is ~8 GB
+(venv + bundled libs), `skills-vendor/` ~1.7 GB, `lsp/` ~140 MB. The rest is
+user data + caches. Do NOT treat the whole folder as reclaimable — most of it
+is git-managed app/vendor (see Step 1) and is expected.
+
 Classify the top dirs:
 - **USER DATA** (inspect only, never auto-delete): `sessions/`, `memories/`,
-  `state.db*`, `kanban/`, `cron/`, `backups/` (keep latest 3), `pending/`.
+  `state.db*` (the single biggest file — ~1 GB, see Step 7), `kanban/`,
+  `cron/`, `backups/` (keep latest 3), `pending/`.
 - **APP/VENDOR** (git-managed — reinstall, do NOT hand-prune): `hermes-agent/`,
-  `coding-env/`, `skills-vendor/`, `bin/`, `lsp/`. Deleting inside these breaks
+  `skills-vendor/`, `bin/`, `lsp/`. Deleting inside these breaks
   the install; reclaim space by `git` reinstall or版本 pin, not `rm`.
+  (`coding-env/` is host-optional and may not exist — verify before guarding.)
 - **CACHE/TRANSIENT** (safe to clean — see Cleanup): `cache/`, `image_cache/`,
   `audio_cache/`, `logs/`.
 
@@ -67,7 +74,7 @@ Classify the top dirs:
 ```bash
 find ~/.hermes -type f -size +100M \
   -not -path "*/node_modules/*" -not -path "*/__pycache__/*" \
-  -not -path "*/venv/*" -not -path "*/.git/*" \
+  -not -path "*/.venv/*" -not -path "*/venv/*" -not -path "*/.git/*" \
   -exec ls -lh {} \; 2>/dev/null
 ```
 Report at the *directory* level (Step 2). Individual >100M files inside
@@ -79,14 +86,21 @@ listing them is noise.
 ```bash
 find ~/.hermes -type f -mtime +90 \
   -not -path "*/node_modules/*" -not -path "*/__pycache__/*" \
-  -not -path "*/venv/*" -not -path "*/.git/*" \
+  -not -path "*/.venv/*" -not -path "*/venv/*" -not -path "*/.git/*" \
   -not -path "*/skills-vendor/*" -not -path "*/hermes-agent/*" \
   -exec ls -lh {} \; 2>/dev/null
 ```
 
-## 5. Cache directories (CORRECTED — parenthesized find)
+## 5. Cache directories (CORRECTED — parenthesized find + vendor exclusions)
+The naive find still surfaces vendored `__pycache__`/`.venv`/`venv`/`node_modules`/
+`skills-vendor`/`backups` dirs (noise — note `*cache*` matches `__pycache__`).
+Exclude them with name + path guards:
 ```bash
 find ~/.hermes \( -type d -name "*cache*" -o -type d -name "*Cache*" \) \
+  -not -name "__pycache__" \
+  -not -path "*/__pycache__/*" -not -path "*/.venv/*" -not -path "*/venv/*" \
+  -not -path "*/node_modules/*" -not -path "*/.git/*" \
+  -not -path "*/skills-vendor/*" -not -path "*/backups/*" \
   -print0 2>/dev/null | xargs -0 du -sh 2>/dev/null | sort -hr
 ```
 
@@ -101,6 +115,8 @@ Look specifically for:
 - Conflicting `profiles/` directories
 
 ## 7. SQLite integrity — via python3 (sqlite3 CLI often absent)
+On a busy host `state.db` is the dominant bloat (~1 GB on a 13 GB install,
+holding 150k+ messages / 1300+ sessions). Run the integrity check on ALL dbs:
 ```bash
 find ~/.hermes -type f \( -name "*.db" -o -name "*.sqlite" -o -name "*.sqlite3" \) \
   -print0 2>/dev/null | while IFS= read -r -d '' db; do
@@ -117,9 +133,13 @@ except Exception as e:
 PY
 done
 ```
-Vacuum ONLY when no live hermes process (see Step 9) and after a backup:
+Vacuum ONLY when no live hermes process (see Step 9) AND after a backup.
+`state.db` is typically held open by 5+ processes (gateway, cron, session
+writers) — `hermes doctor` will report "N process(es) holding the DB open".
+If any are live, VACUUM will fail or corrupt; stop the gateway first.
 ```bash
 cp ~/.hermes/state.db ~/.hermes/state.db.bak-$(date +%s)
+# confirm Step 9 shows NO live process before running:
 python3 -c "import sqlite3; sqlite3.connect('$HOME/.hermes/state.db').execute('VACUUM')"
 ```
 
@@ -153,14 +173,14 @@ never delete them. Stop the gateway first
 | `~/.npm`, `~/.cache/yarn` | Yes | `npm cache clean --force` |
 | Stale `*.bak`/`*.backup` | Yes | `find ~/.hermes -name "*.bak" -delete` |
 | `state.db-wal`/`state.db-shm` | **ONLY if no live process** (Step 9) | stop hermes, then delete |
-| `hermes-agent/` `coding-env/` `skills-vendor/` | **NO — reinstall, don't prune** | n/a |
+| `hermes-agent/` `skills-vendor/` `lsp/` | **NO — reinstall, don't prune** | n/a |
 
 ## Reporting Template
 ```
 === HERMES FOLDER HEALTH REPORT ===
 Host disk: X% used, Y free   [de-escalate if healthy]
 Total .hermes: X GB
-  APP/VENDOR (do not prune):  hermes-agent/venv X, skills-vendor/headroom X, coding-env/lib X
+  APP/VENDOR (do not prune):  hermes-agent/venv X, skills-vendor/headroom X, lsp X
   USER DATA:                  state.db X, sessions X, kanban X, backups X
   CACHE/TRANSIENT:            cache X, logs X
 Large files (>100M, excl vendor): [list]
@@ -182,8 +202,8 @@ RECOMMENDED CLEANUP (awaiting approval):
 - **Never delete `~/.hermes/.env`** — API keys.
 - **Never delete `~/.hermes/config.yaml`** without a verified backup.
 - **Never delete `sessions/` or `memories/`** — user data.
-- **Never hand-prune `hermes-agent/`, `coding-env/`, `skills-vendor/`** — these
-  are 21 GB+ of git-managed app/vendor; reclaim via reinstall, not `rm`.
+- **Never hand-prune `hermes-agent/`, `skills-vendor/`, `lsp/`** — these
+  are ~10 GB of git-managed app/vendor; reclaim via reinstall, not `rm`.
 - **WAL/SHM are live** while hermes runs — check Step 9 first.
 - **`sqlite3` CLI is often absent** — use the python3 check (Step 7).
 - **Termux/Android**: `/data/data/com.termux` is real app storage; `~` may be a
@@ -191,3 +211,13 @@ RECOMMENDED CLEANUP (awaiting approval):
 - **Supervisord sockets/pids** are active if gateway runs — stop it before cleanup.
 - Stale-file scans MUST exclude `node_modules`/`venv`/`.git`/`__pycache__` or
   they flag thousands of legitimate vendored files.
+- **"Corrected" find still leaks vendored cache (2026-08-20).** The v1.1 fix
+  parenthesized the `-o` so it returned dirs — but did NOT exclude
+  `node_modules`/`venv`/`__pycache__`/`skills-vendor`/`backups`. Live run still
+  surfaced googleapiclient/discovery_cache (inside venv), lsp/node_modules
+  type caches, and dozens of `skills-vendor/__pycache__` dirs. Any "fixed" find
+  in this skill must carry the full `-not -path` vendor exclusion list or it is
+  not actually fixed.
+- **State.db is the real bloat, not caches (2026-08-20).** On a 13 GB `.hermes`,
+  `state.db` alone is ~1 GB (150k+ messages). A vacuum is unsafe while the
+  gateway/cron hold it open — Step 7 must defer to Step 9's live-process check.
