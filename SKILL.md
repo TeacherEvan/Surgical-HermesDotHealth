@@ -1,7 +1,7 @@
 ---
 name: surgical-HermesDotHealth
 description: "Diagnose .hermes folder health, size, bloat, and stale files — portable (linux/macos/windows-git-bash/termux), bug-free find, hermes doctor-first."
-version: 1.2.0
+version: 1.2.1
 author: Hermes curator (revised by LittleDevil)
 license: MIT
 platforms: [linux, macos, windows, termux]
@@ -11,7 +11,7 @@ metadata:
     related_skills: [hermes-agent]
 ---
 
-# Hermes Folder Health Diagnostic (v1.1)
+# Hermes Folder Health Diagnostic (v1.2.1)
 
 Measure `.hermes` size, find genuine bloat, stale files, and cache buildup — and
 separate **user data** (safe to inspect, never auto-delete) from **app/vendor
@@ -52,7 +52,7 @@ the per-directory sizing breakdown that `doctor` does not give.
 ## 2. Measure `.hermes` total size and top contributors
 ```bash
 du -sh ~/.hermes
-du -sh -d1 ~/.hermes 2>/dev/null | sort -hr | head -25
+du -h --max-depth=1 ~/.hermes 2>/dev/null | sort -hr | head -25
 ```
 On a typical dev host `.hermes` is ~13 GB: `hermes-agent/` alone is ~8 GB
 (venv + bundled libs), `skills-vendor/` ~1.7 GB, `lsp/` ~140 MB. The rest is
@@ -221,3 +221,11 @@ RECOMMENDED CLEANUP (awaiting approval):
 - **State.db is the real bloat, not caches (2026-08-20).** On a 13 GB `.hermes`,
   `state.db` alone is ~1 GB (150k+ messages). A vacuum is unsafe while the
   gateway/cron hold it open — Step 7 must defer to Step 9's live-process check.
+
+- **`du -sh -d1` is BSD/macOS-only (2026-09-05).** GNU coreutils (Linux,
+  Termux, git-bash) treats `-s` (summarize) as conflicting with `-d`/`--max-depth`,
+  so `du -sh -d1 ~/.hermes` exits with a warning that is then silenced by
+  `2>/dev/null` — and prints nothing. Step 2 now uses
+  `du -h --max-depth=1 ~/.hermes` (accepted by GNU; macOS modern `du` accepts
+  `--max-depth` too). If you must support both BSD and old GNU, drop `-s` and
+  use the depth flag (`-d 1` on BSD, `--max-depth=1` on GNU) with a wrapper.
