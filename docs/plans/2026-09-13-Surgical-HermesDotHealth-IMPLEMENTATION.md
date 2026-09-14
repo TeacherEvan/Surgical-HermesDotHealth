@@ -10,17 +10,17 @@ Run the surgical-implementation V2 pipeline end-to-end on the shipped `Surgical-
 - `docs/.scratch-audit/` stays gitignored; only `docs/plans/` + `.gitignore` may be committed.
 
 ## Objectives
-- [ ] OBJ-001. Confirm affected modules and baseline assumptions from CODEBASE-STATE.md.
-- [ ] OBJ-002. Confirm interfaces/contracts: script flags, Step ordering, vendor exclusion list.
-- [ ] OBJ-003. Author V2 planning artifacts (REQUIREMENTS, CODEBASE-STATE, ARCHITECTURE, TODO).
-- [ ] OBJ-004. Run CONSISTENCY_GATE: reviewer PASS on REQUIREMENTS ↔ CODEBASE-STATE ↔ ARCHITECTURE ↔ TODO.
-- [ ] OBJ-005. Syntax-gate the shipped script: `bash -n scripts/hermes-doctor.sh` exit 0.
-- [ ] OBJ-006. Live-run the script; confirm Step 0 de-escalation + well-formed report.
-- [ ] OBJ-007. Scan script for spec drift vs SKILL.md (Step 1–9 coverage, find parens, vendor excludes).
-- [ ] OBJ-008. SECURITY_AUDIT: secret scan + scope review; no CRITICAL findings.
-- [ ] OBJ-009. Author TRACEABILITY.md mapping OBJ → REQ → evidence.
-- [ ] OBJ-010. Author debrief.md (17 sections) + copy plan/debrief to `docs/plans/`.
-- [ ] OBJ-011. Commit scoped artifacts; push (push=1); confirm `0 0` remote state.
+- [x] OBJ-001. Confirm affected modules and baseline assumptions from CODEBASE-STATE.md.
+- [x] OBJ-002. Confirm interfaces/contracts: script flags, Step ordering, vendor exclusion list.
+- [x] OBJ-003. Author V2 planning artifacts (REQUIREMENTS, CODEBASE-STATE, ARCHITECTURE, TODO).
+- [x] OBJ-004. Run CONSISTENCY_GATE: reviewer PASS on REQUIREMENTS ↔ CODEBASE-STATE ↔ ARCHITECTURE ↔ TODO.
+- [x] OBJ-005. Syntax-gate the shipped script: `bash -n scripts/hermes-doctor.sh` exit 0.
+- [x] OBJ-006. Live-run the script; confirm Step 0 de-escalation + well-formed report.
+- [x] OBJ-007. Scan script for spec drift vs SKILL.md (Step 1–9 coverage, find parens, vendor excludes).
+- [x] OBJ-008. SECURITY_AUDIT: secret scan + scope review; no CRITICAL findings.
+- [x] OBJ-009. Author TRACEABILITY.md mapping OBJ → REQ → evidence.
+- [x] OBJ-010. Author debrief.md (17 sections) + copy plan/debrief to `docs/plans/`.
+- [x] OBJ-011. Commit scoped artifacts; push (push=1); confirm `0 0` remote state.
 
 ## Objective evidence
 ### OBJ-001
@@ -91,7 +91,7 @@ Run the surgical-implementation V2 pipeline end-to-end on the shipped `Surgical-
 - Evidence: commit SHA + push output
 
 ## Definition of done
-- [ ] Every required objective is complete or explicitly blocked.
-- [ ] Acceptance criteria have evidence in TRACEABILITY.md.
-- [ ] Security review complete in SECURITY.md.
-- [ ] Final audit + debrief.md complete.
+- [] Every required objective is complete or explicitly blocked.
+- [] Acceptance criteria have evidence in TRACEABILITY.md.
+- [] Security review complete in SECURITY.md.
+- [] Final audit + debrief.md complete.
