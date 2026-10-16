@@ -1,0 +1,30 @@
+name: skill-conform
+
+"on":
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  conform:
+    name: Skill authoring conformance
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # Regex-based on purpose: no pip install, so it cannot fail on a missing
+      # dependency the way run-ci-locally.py does without pyyaml.
+      - name: Run conformance gate
+        run: python3 scripts/conform.py
+
+      - name: Shell scripts parse
+        run: |
+          for f in scripts/*.sh; do [ -e "$f" ] && bash -n "$f"; done
+          true
