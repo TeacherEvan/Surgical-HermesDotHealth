@@ -23,43 +23,54 @@ trees** (git-managed, reinstall — do NOT hand-prune).
 > xargs -0`. SQLite is checked via `python3` (the `sqlite3` CLI is often absent).
 
 ## Trigger
+
 Use when:
+
 - `.hermes` folder size seems excessive
 - `hermes doctor` reports filesystem warnings
 - You suspect cache buildup or orphaned files in `.hermes/`
 - Periodic maintenance on a Termux/Android host (check both `~` and `/data/data/com.termux`)
 
 ## 0. Host pressure first — de-escalate if healthy
+
 Do NOT recommend cleanup on a healthy disk. Measure first:
+
 ```bash
 df -h ~
 ```
+
 If `Use%` < 80% AND free space > 10 GB, state "No disk pressure" and stop unless
 the user explicitly wants a tidy-up. Most `.hermes` size is git-managed
 app/vendor (see Step 1) and is expected.
 
 ## 1. `hermes doctor` is the primary signal — run it first
+
 It already checks skills, tools, memory provider, credentials, and offers auto-fix:
+
 ```bash
 hermes doctor 2>&1
 hermes doctor --fix 2>&1      # auto-fixes what it can (e.g. WAL checkpoint)
 hermes doctor --live 2>&1     # opt-in real network probes per backend
 ```
+
 Parse for: filesystem warnings, config validation, credential issues (see
 the `hermes-agent` skill), model/provider connectivity. This skill ADDS
 the per-directory sizing breakdown that `doctor` does not give.
 
 ## 2. Measure `.hermes` total size and top contributors
+
 ```bash
 du -sh ~/.hermes
 du -h --max-depth=1 ~/.hermes 2>/dev/null | sort -hr | head -25
 ```
+
 On a typical dev host `.hermes` is ~13 GB: `hermes-agent/` alone is ~8 GB
 (venv + bundled libs), `skills-vendor/` ~1.7 GB, `lsp/` ~140 MB. The rest is
 user data + caches. Do NOT treat the whole folder as reclaimable — most of it
 is git-managed app/vendor (see Step 1) and is expected.
 
 Classify the top dirs:
+
 - **USER DATA** (inspect only, never auto-delete): `sessions/`, `memories/`,
   `state.db*` (the single biggest file — ~1 GB, see Step 7), `kanban/`,
   `cron/`, `backups/` (keep latest 3), `pending/`.
@@ -71,18 +82,22 @@ Classify the top dirs:
   `audio_cache/`, `logs/`.
 
 ## 3. Large files (>100M) — exclude vendored trees (noise)
+
 ```bash
 find ~/.hermes -type f -size +100M \
   -not -path "*/node_modules/*" -not -path "*/__pycache__/*" \
   -not -path "*/.venv/*" -not -path "*/venv/*" -not -path "*/.git/*" \
   -exec ls -lh {} \; 2>/dev/null
 ```
+
 Report at the *directory* level (Step 2). Individual >100M files inside
 `node_modules`/`venv` are vendor libs — never delete piecemeal.
 
 ## 4. Stale files (>90 days) — exclude git/vendor trees
+
 Old mtime inside `hermes-agent/` or `skills-vendor/` is EXPECTED (vendored);
 listing them is noise.
+
 ```bash
 find ~/.hermes -type f -mtime +90 \
   -not -path "*/node_modules/*" -not -path "*/__pycache__/*" \
@@ -92,9 +107,11 @@ find ~/.hermes -type f -mtime +90 \
 ```
 
 ## 5. Cache directories (CORRECTED — parenthesized find + vendor exclusions)
+
 The naive find still surfaces vendored `__pycache__`/`.venv`/`venv`/`node_modules`/
 `skills-vendor`/`backups` dirs (noise — note `*cache*` matches `__pycache__`).
 Exclude them with name + path guards:
+
 ```bash
 find ~/.hermes \( -type d -name "*cache*" -o -type d -name "*Cache*" \) \
   -not -name "__pycache__" \
@@ -105,18 +122,23 @@ find ~/.hermes \( -type d -name "*cache*" -o -type d -name "*Cache*" \) \
 ```
 
 ## 6. Duplicate / conflicting config files (CORRECTED)
+
 ```bash
 find ~/.hermes \( -name "*.yaml" -o -name "*.yml" -o -name "*.json" -o -name "*.toml" \) \
   -print0 2>/dev/null | xargs -0 ls -la 2>/dev/null
 ```
+
 Look specifically for:
+
 - Multiple `config.yaml` variants / `config.yaml.bak`
 - `*.bak`, `*.backup`, `*.old` stale copies
 - Conflicting `profiles/` directories
 
 ## 7. SQLite integrity — via python3 (sqlite3 CLI often absent)
+
 On a busy host `state.db` is the dominant bloat (~1 GB on a 13 GB install,
 holding 150k+ messages / 1300+ sessions). Run the integrity check on ALL dbs:
+
 ```bash
 find ~/.hermes -type f \( -name "*.db" -o -name "*.sqlite" -o -name "*.sqlite3" \) \
   -print0 2>/dev/null | while IFS= read -r -d '' db; do
@@ -133,10 +155,12 @@ except Exception as e:
 PY
 done
 ```
+
 Vacuum ONLY when no live hermes process (see Step 9) AND after a backup.
 `state.db` is typically held open by 5+ processes (gateway, cron, session
 writers) — `hermes doctor` will report "N process(es) holding the DB open".
 If any are live, VACUUM will fail or corrupt; stop the gateway first.
+
 ```bash
 cp ~/.hermes/state.db ~/.hermes/state.db.bak-$(date +%s)
 # confirm Step 9 shows NO live process before running:
@@ -144,6 +168,7 @@ python3 -c "import sqlite3; sqlite3.connect('$HOME/.hermes/state.db').execute('V
 ```
 
 ## 8. Broader system cache audit (real safe wins live OUTSIDE .hermes)
+
 ```bash
 for p in ~/.cache/pip ~/.cache/uv ~/.npm ~/.cache/yarn ~/.cache; do
   printf "%-28s " "$p"; du -sh "$p" 2>/dev/null || echo absent
@@ -151,21 +176,25 @@ done
 docker system df 2>/dev/null || podman system df 2>/dev/null
 du -sh /tmp 2>/dev/null
 ```
+
 On most dev hosts `~/.npm` + `~/.cache/pip` + `~/.cache/uv` are the biggest
 reclaimable caches — far larger than anything inside `.hermes`.
 
 ## 9. Orphaned processes / live-state check (BEFORE any WAL/SHM delete)
+
 ```bash
 ls -la ~/.hermes/*.sock ~/.hermes/*.pid 2>/dev/null
 pgrep -fl "hermes" 2>/dev/null || echo "no hermes process running"
 ```
+
 If `pgrep` finds a live process, `state.db-wal` / `state.db-shm` are ACTIVE —
 never delete them. Stop the gateway first
 (`supervisorctl -c ~/.hermes/supervisord.conf stop hermes-gateway`).
 
 ## Cleanup Actions (require explicit user approval)
+
 | Finding | Safe? | Command |
-|---|---|---|
+| --- | --- | --- |
 | `~/.hermes/cache/*` | Yes (regenerated) | `rm -rf ~/.hermes/cache/*` |
 | `~/.hermes/logs/*.log` >30d | Yes | `find ~/.hermes/logs -name "*.log" -mtime +30 -delete` |
 | `~/.hermes/backups/` old | Keep latest 3 | Manual review |
@@ -176,7 +205,8 @@ never delete them. Stop the gateway first
 | `hermes-agent/` `skills-vendor/` `lsp/` | **NO — reinstall, don't prune** | n/a |
 
 ## Reporting Template
-```
+
+```text
 === HERMES FOLDER HEALTH REPORT ===
 Host disk: X% used, Y free   [de-escalate if healthy]
 Total .hermes: X GB
@@ -199,6 +229,7 @@ RECOMMENDED CLEANUP (awaiting approval):
 ```
 
 ## Pitfalls
+
 - **Never delete `~/.hermes/.env`** — API keys.
 - **Never delete `~/.hermes/config.yaml`** without a verified backup.
 - **Never delete `sessions/` or `memories/`** — user data.
