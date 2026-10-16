@@ -1,6 +1,6 @@
 ---
-name: surgical-HermesDotHealth
-description: "Diagnose .hermes folder health, size, bloat, and stale files — portable (linux/macos/windows-git-bash/termux), bug-free find, hermes doctor-first."
+name: surgical-hermesdothealth
+description: "Use when .hermes folder health, bloat, or stale caches."
 version: 1.2.1
 author: Hermes curator (revised by LittleDevil)
 license: MIT
@@ -65,7 +65,7 @@ Classify the top dirs:
   `cron/`, `backups/` (keep latest 3), `pending/`.
 - **APP/VENDOR** (git-managed — reinstall, do NOT hand-prune): `hermes-agent/`,
   `skills-vendor/`, `bin/`, `lsp/`. Deleting inside these breaks
-  the install; reclaim space by `git` reinstall or版本 pin, not `rm`.
+  the install; reclaim space by `git` reinstall or version pin, not `rm`.
   (`coding-env/` is host-optional and may not exist — verify before guarding.)
 - **CACHE/TRANSIENT** (safe to clean — see Cleanup): `cache/`, `image_cache/`,
   `audio_cache/`, `logs/`.
