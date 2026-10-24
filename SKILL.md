@@ -41,6 +41,8 @@ explicit user approval and are never automated.
   (`bash scripts/hermes-doctor.sh`, `--live` for real network probes).
   Exits 3 on `--apply`: it never mutates.
 - `scripts/conform.py` — family authoring gate (`python3 scripts/conform.py`).
+- `references/report-script.md` — the standalone `~/hermes-dothealth-report` generator
+  (HTML desktop report + `health-snapshot.json` deltas), if the user has it installed.
 
 ## 0. Host pressure first — de-escalate if healthy
 
