@@ -13,7 +13,7 @@ for arg in "$@"; do
     --help)
       echo "Usage: bash scripts/hermes-doctor.sh [--help] [--apply] [--live]"
       echo "  --help    Print this usage and exit"
-      echo "  --apply   Apply recommended cleanup actions (DANGEROUS - read first)"
+      echo "  --apply   Reserved; exits 3. This script never mutates anything."
       echo "  --live    Enable real network probes per backend (hermes doctor --live)"
       exit 0
       ;;
@@ -35,12 +35,17 @@ echo ""
 
 # Step 0: Host pressure de-escalation
 echo "--- Step 0: Host disk pressure ---"
-DF_OUT=$(df -h ~ 2>/dev/null || echo "")
+# -P = POSIX output, -k = 1K blocks: stable columns on Linux, macOS and BusyBox,
+# and immune to the G/M/T suffix that `df -h` switches between by volume size.
+DF_OUT=$(df -Pk ~ 2>/dev/null || echo "")
 if [ -n "$DF_OUT" ]; then
   USE_PCT=$(echo "$DF_OUT" | awk 'NR==2 {gsub(/%/,"",$5); print $5}')
-  FREE_GB=$(echo "$DF_OUT" | awk 'NR==2 {print $4}' | sed 's/G.*//')
-  echo "  Disk use: ${USE_PCT}% | Free: $(echo "$DF_OUT" | awk 'NR==2 {print $4}')"
-  if [ "${USE_PCT:-100}" -lt 80 ] && [ "${FREE_GB:-0}" -gt 10 ]; then
+  FREE_KB=$(echo "$DF_OUT" | awk 'NR==2 {print $4}')
+  case "${USE_PCT:-}" in ''|*[!0-9]*) USE_PCT=100 ;; esac
+  case "${FREE_KB:-}" in ''|*[!0-9]*) FREE_KB=0 ;; esac
+  FREE_GB=$(( FREE_KB / 1048576 ))
+  echo "  Disk use: ${USE_PCT}% | Free: ${FREE_GB} GB"
+  if [ "$USE_PCT" -lt 80 ] && [ "$FREE_GB" -gt 10 ]; then
     echo "  No disk pressure (Use% < 80 AND free > 10 GB) - de-escalating"
     echo "  Skipping full scan per skill Step 0."
     exit 0
@@ -63,7 +68,9 @@ echo ""
 # Step 2: .hermes size
 echo "--- Step 2: .hermes size (top 25) ---"
 if [ -d "$HERMES_HOME" ]; then
-  du -h --max-depth=1 "$HERMES_HOME" 2>/dev/null | sort -hr | head -25
+  # `-d 1` is understood by GNU coreutils and BSD du; `--max-depth` is GNU-only
+  # and silently produced an empty report on macOS.
+  du -h -d 1 "$HERMES_HOME" 2>/dev/null | sort -hr | head -25
 else
   echo "  $HERMES_HOME not found"
 fi
@@ -156,6 +163,7 @@ echo "- [ ] stale .bak"
 echo "- [ ] vacuum state.db (only if no live process)"
 if [ "$APPLY" -eq 1 ]; then
   echo ""
-  echo "*** WARNING: --apply flag set. Cleanup NOT executed (safety gate)."
-  echo "*** Re-run with explicit confirmation to apply."
+  echo "*** --apply is not implemented. This script is read-only by design." >&2
+  echo "*** Work through RECOMMENDED CLEANUP manually, one path at a time." >&2
+  exit 3
 fi

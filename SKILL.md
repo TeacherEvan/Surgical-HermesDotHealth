@@ -1,17 +1,18 @@
 ---
 name: surgical-hermesdothealth
 description: "Use when .hermes folder health, bloat, or stale caches."
-version: 1.2.1
-author: Hermes curator (revised by LittleDevil)
+version: 1.2.2
+author: "TeacherEvan, Hermes Agent (revised by LittleDevil)"
 license: MIT
 platforms: [linux, macos, windows, termux]
 metadata:
   hermes:
+    category: devops
     tags: [hermes, doctor, diagnosis, folder-health, bloat, cache, cleanup]
-    related_skills: [hermes-agent]
+    related_skills: [hermes-agent, surgical-audit]
 ---
 
-# Hermes Folder Health Diagnostic (v1.2.1)
+# Hermes Folder Health Diagnostic (v1.2.2)
 
 Measure `.hermes` size, find genuine bloat, stale files, and cache buildup — and
 separate **user data** (safe to inspect, never auto-delete) from **app/vendor
@@ -30,6 +31,16 @@ Use when:
 - `hermes doctor` reports filesystem warnings
 - You suspect cache buildup or orphaned files in `.hermes/`
 - Periodic maintenance on a Termux/Android host (check both `~` and `/data/data/com.termux`)
+
+**Don't use for:** deleting anything. This skill is diagnostic — cleanup steps require
+explicit user approval and are never automated.
+
+## Auxiliary Resources
+
+- `scripts/hermes-doctor.sh` — the whole procedure as one read-only run
+  (`bash scripts/hermes-doctor.sh`, `--live` for real network probes).
+  Exits 3 on `--apply`: it never mutates.
+- `scripts/conform.py` — family authoring gate (`python3 scripts/conform.py`).
 
 ## 0. Host pressure first — de-escalate if healthy
 
@@ -253,10 +264,25 @@ RECOMMENDED CLEANUP (awaiting approval):
   `state.db` alone is ~1 GB (150k+ messages). A vacuum is unsafe while the
   gateway/cron hold it open — Step 7 must defer to Step 9's live-process check.
 
-- **`du -sh -d1` is BSD/macOS-only (2026-09-05).** GNU coreutils (Linux,
-  Termux, git-bash) treats `-s` (summarize) as conflicting with `-d`/`--max-depth`,
-  so `du -sh -d1 ~/.hermes` exits with a warning that is then silenced by
-  `2>/dev/null` — and prints nothing. Step 2 now uses
-  `du -h --max-depth=1 ~/.hermes` (accepted by GNU; macOS modern `du` accepts
-  `--max-depth` too). If you must support both BSD and old GNU, drop `-s` and
-  use the depth flag (`-d 1` on BSD, `--max-depth=1` on GNU) with a wrapper.
+- **`-s` and a depth flag are mutually exclusive (corrected 2026-10-24).** GNU
+  coreutils treats `du -sh -d1` as a conflict and warns; `2>/dev/null` hides the
+  warning and the section renders empty. The earlier fix (`--max-depth=1`) is
+  **GNU-only** — BSD/macOS `du` rejects it, so the same silent-empty bug came back
+  on macOS. Step 2 now uses `du -h -d 1`, which both GNU and BSD accept. Never
+  combine `-s` with a depth flag.
+- **`df -h` suffixes follow the volume, not the host (corrected 2026-10-24).**
+  Free space can be reported as `G`, `T`, or `M`; `sed 's/G.*//'` left `1.2T`
+  behind and the integer compare in Step 0 failed, so a healthy TB volume never
+  de-escalated. Use `df -Pk` (1K blocks) and integer maths.
+
+## Verification
+
+```bash
+bash -n scripts/hermes-doctor.sh      # syntax
+bash scripts/hermes-doctor.sh --help  # flags documented
+bash scripts/hermes-doctor.sh         # read-only run; must print a report
+bash scripts/hermes-doctor.sh --apply; echo "exit=$?"   # must be 3
+```
+
+A run that prints a report but exits non-zero, or that prints an empty Step 2, is a failure —
+not a clean host.
